@@ -32,7 +32,7 @@ Note: I config forwarded_port ssh port(22) to host machine: 32221. So that you s
 
 But right now you can't use **2** way because default ssh server is not allow *PasswordAuthentication*
 
-##### Step-3: Setup memory and CPUs
+#### Step-3: Setup memory and CPUs
 ```
 worker1.vm.provider "virtualbox" do |worker1|
     worker1.memory = "2404"
