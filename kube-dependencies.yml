@@ -1,0 +1,99 @@
+- hosts: all
+  become: yes
+  tasks:
+    - name: remove Docker
+      apt:
+        name: "{{ item }}"
+        state: absent
+      with_items:
+      - 'docker-ce-cli'
+      - 'docker'
+      - 'docker-ce'
+      - 'docker-engine'
+      - 'docker.io'
+      - 'containerd runc'
+    - name: Update all packages to the latest version
+      apt:
+        upgrade: dist
+    - name: Ansible apt with_items example
+      apt:
+        name: "{{ item }}"
+        update_cache: true
+        state: present
+      with_items:
+        - 'apt-transport-https'
+        - 'ca-certificates'
+        - 'curl'
+        - 'gnupg-agent'
+        - 'software-properties-common'
+    - name: Add Docker GPG key
+      apt_key: url=https://download.docker.com/linux/ubuntu/gpg
+    - name: Add Docker APT repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu  {{ansible_distribution_release}}  stable
+    - name: Update all packages to the latest version
+      apt:
+        upgrade: dist
+    - name: install Docker
+      apt:
+        name: "{{ item }}"
+        update_cache: true
+        state: present
+      with_items:
+        - 'docker-ce'
+        - 'docker-ce-cli'
+        - 'containerd.io'
+    - name: Ansible copy file force
+      copy:
+        src: './daemon.json'
+        dest: '/etc/docker/daemon.json'
+        force: yes
+    - name: restart service docker
+      systemd:
+        state: restarted
+        daemon_reload: yes
+        name: docker
+    - name: check to see if kubeadm is already installed
+      command: "kubeadm version"
+      ignore_errors: true
+      register: kubeadm_installed
+      changed_when: false
+    - block:
+      - name: reset kubeadm
+        shell: "kubeadm reset --force"
+      - name: remove kubenet
+        apt:
+          name: "{{ item }}"
+          state: absent
+        with_items:
+        - 'kubelet'
+        - 'kubectl'
+        - 'kubeadm'
+        - 'kubernetes-cni'
+      when: kubeadm_installed.rc == 0
+    - name: add Kubernetes apt-key
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+    - name: add Kubernetes' APT repository
+      apt_repository:
+        repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+        state: present
+        filename: 'kubernetes'
+    - name: install kubelet
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: true
+      with_items:
+       - 'kubeadm'
+       - 'kubelet'
+
+- hosts: master
+  become: yes
+  tasks:
+   - name: install kubectl
+     apt:
+       name: kubectl
+       state: present
+       force: yes

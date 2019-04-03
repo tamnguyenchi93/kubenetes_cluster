@@ -1,0 +1,44 @@
+- hosts: master
+  become: yes
+  tasks:
+    - name: get node IP
+      shell: "ifconfig enp0s8 | grep Mask | awk '{print $2}'| cut -f2 -d:"
+      register: IP_ADDR
+    - name: reset current kubeadm
+      shell: kubeadm reset --force
+    
+    - name: check if rules file exists
+      stat: 
+        path: /etc/default/kubelet
+      register: kubelet_default_config
+  
+    - name: Update default_config
+      shell: sed -i "/^[^#]*KUBELET_EXTRA_ARGS=/c\KUBELET_EXTRA_ARGS=--node-ip={{ IP_ADDR.stdout_lines[0] }}" /etc/default/kubelet
+      when: kubelet_default_config.stat.exists == True
+    - name: Config kubelet node_ip
+      shell: echo "KUBELET_EXTRA_ARGS=--node-ip={{ IP_ADDR.stdout_lines[0] }}" > /etc/default/kubelet
+      when: kubelet_default_config.stat.exists == False
+
+    - name: initialize the cluster
+      shell: kubeadm init --apiserver-advertise-address={{ IP_ADDR.stdout_lines[0] }} --apiserver-cert-extra-sans={{ IP_ADDR.stdout_lines[0] }} --node-name=master --pod-network-cidr=10.244.0.0/16 > ~/cluster_init.txt
+      # shell: kubeadm init --pod-network-cidr=10.244.0.0/16 > ~/cluster_init.txt
+  
+    - name: create .kube directory
+      become: yes
+      become_user: ubuntu
+      file:
+        path: $HOME/.kube
+        state: directory
+        mode: 0755
+
+    - name: copy admin.conf to user's kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/ubuntu/.kube/config
+        remote_src: yes
+        owner: ubuntu
+
+    - name: install Pod network
+      become: yes
+      become_user: ubuntu
+      shell: kubectl -n kube-system apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml >> ~/pod_network_setup.txt
